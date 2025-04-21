@@ -533,3 +533,141 @@ function Get-FormattedUptime(`$seconds) {
 # Load icons
 `$availableIcon = [System.Drawing.Icon]::ExtractAssociatedIcon([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
 `$busyIcon = [System.Drawing.Icon]::ExtractAssociatedIcon([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+`$notifyIcon.Icon = `$availableIcon
+`$notifyIcon.Visible = `$true
+
+# Start update check timer
+`$updateTimer = New-Object System.Windows.Forms.Timer
+`$updateTimer.Interval = 30000 # 30 seconds
+`$updateTimer.Add_Tick({
+    try {
+        `$status = Invoke-RestMethod -Uri "http://localhost:8000/status" -Method Get
+        if (`$status.is_busy) {
+            `$notifyIcon.Icon = `$busyIcon
+            `$notifyIcon.Text = "RENT-A-HAL Node (Busy)"
+        } else {
+            `$notifyIcon.Icon = `$availableIcon
+            `$notifyIcon.Text = "RENT-A-HAL Node (Available) - `$(`$status.stats.requests_processed) requests"
+        }
+    } catch {
+        # Silently fail on update, will retry on next tick
+    }
+})
+`$updateTimer.Start()
+
+# Balloon tip on startup
+`$notifyIcon.BalloonTipTitle = "RENT-A-HAL Node Active"
+`$notifyIcon.BalloonTipText = "Your system is now contributing to the RENT-A-HAL neural mesh! Right-click for options."
+`$notifyIcon.ShowBalloonTip(5000)
+
+# Keep the application running
+`$appContext = New-Object System.Windows.Forms.ApplicationContext
+[System.Windows.Forms.Application]::Run(`$appContext)
+"@
+
+        $trayScript | Out-File -FilePath "$workDir\tray_app.ps1" -Encoding utf8
+        
+        # Create startup shortcut for tray app
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\RENT-A-HAL Tray.lnk")
+        $Shortcut.TargetPath = "powershell.exe"
+        $Shortcut.Arguments = "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$workDir\tray_app.ps1`""
+        $Shortcut.Save()
+        
+        # Start the tray app
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$workDir\tray_app.ps1`"" -WindowStyle Hidden
+        
+        Write-Host "Tray application set up successfully." -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "Tray app setup failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+# Main installation flow
+try {
+    Write-Host "=== RENT-A-HAL RTX Node Setup ===" -ForegroundColor Cyan
+    Write-Host "This script will set up your system as a RENT-A-HAL worker node." -ForegroundColor Cyan
+    Write-Host "Press Ctrl+C at any time to cancel." -ForegroundColor Yellow
+    Start-Sleep -Seconds 3
+    
+    # Check GPU compatibility
+    if (-not (Test-RTXCompatibility)) {
+        throw "Compatible RTX GPU not found. Setup cannot continue."
+    }
+    
+    # Check if CUDA is installed, install if needed
+    Show-Progress -Activity "Checking for CUDA installation..." -PercentComplete 8
+    $cudaInstalled = $false
+    if (Test-Path "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA") {
+        Write-Host "CUDA already installed." -ForegroundColor Green
+        $cudaInstalled = $true
+    }
+    
+    if (-not $cudaInstalled) {
+        $cudaInstalled = Install-CUDA
+        if (-not $cudaInstalled) {
+            throw "CUDA installation failed. Please install manually and try again."
+        }
+    }
+    
+    # Install Ollama
+    $ollamaInstalled = Install-Ollama
+    if (-not $ollamaInstalled) {
+        throw "Ollama installation failed. Please try again."
+    }
+    
+    # Install Models
+    $modelsInstalled = Install-Models
+    if (-not $modelsInstalled) {
+        throw "Model installation failed. Please try again."
+    }
+    
+    # Set up ngrok tunnel
+    $tunnelUrl = Install-Ngrok
+    if (-not $tunnelUrl) {
+        throw "Ngrok tunnel setup failed. Please try again."
+    }
+    
+    # Start node server
+    $serverStarted = Start-NodeServer
+    if (-not $serverStarted) {
+        throw "Node server setup failed. Please try again."
+    }
+    
+    # Register with RENT-A-HAL
+    $registered = Register-WithRentAHal
+    if (-not $registered) {
+        Write-Host "Registration with RENT-A-HAL failed. You can manually register later." -ForegroundColor Yellow
+    }
+    
+    # Set up tray app
+    $traySetup = Initialize-TrayApp
+    if (-not $traySetup) {
+        Write-Host "Tray app setup failed. The node will still work, but without the tray interface." -ForegroundColor Yellow
+    }
+    
+    # Installation complete
+    Show-Progress -Activity "Installation complete!" -PercentComplete 100
+    Write-Host "===== RENT-A-HAL RTX Node Setup Complete! =====" -ForegroundColor Green
+    Write-Host "Your system is now a worker node in the RENT-A-HAL neural mesh." -ForegroundColor Green
+    Write-Host "A system tray icon has been added for monitoring and control." -ForegroundColor Cyan
+    Write-Host "The node server will automatically start when you boot your computer." -ForegroundColor Cyan
+    Write-Host "Log files are stored in: $workDir" -ForegroundColor Cyan
+    Write-Host "Thank you for contributing to the RENT-A-HAL community!" -ForegroundColor Green
+    
+    # Keep window open for the user to read
+    Write-Host "Press any key to exit..." -ForegroundColor Yellow
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+}
+catch {
+    Write-Host "Setup failed: $_" -ForegroundColor Red
+    Write-Host "Check the log file for details: $logFile" -ForegroundColor Yellow
+    Write-Host "Press any key to exit..." -ForegroundColor Yellow
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+}
+finally {
+    Stop-Transcript
+}
