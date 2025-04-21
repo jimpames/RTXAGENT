@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RENT-A-HAL: Contribute Your RTX GPU</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto px-4 py-12">
+        <div class="max-w-3xl mx-auto text-center">
+            <h1 class="text-5xl font-bold mb-6">Join the RENT-A-HAL Neural Mesh</h1>
+            <p class="text-xl mb-8">Contribute your RTX GPU to the most advanced distributed AI system.</p>
+            
+            <div id="gpu-status" class="mb-8 p-4 bg-gray-800 rounded-lg hidden">
+                <h2 class="text-2xl mb-2">System Check</h2>
+                <div id="gpu-check" class="flex items-center justify-center mb-2">
+                    <span class="mr-2">Checking GPU...</span>
+                    <div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-green-500"></div>
+                </div>
+                <div id="gpu-result" class="hidden"></div>
+            </div>
+            
+            <div id="requirements" class="mb-8 text-left p-6 bg-gray-800 rounded-lg">
+                <h2 class="text-2xl mb-4 text-center">Requirements</h2>
+                <ul class="list-disc pl-6 space-y-2">
+                    <li>NVIDIA RTX 2060 Super or better</li>
+                    <li>Windows 10 64-bit</li>
+                    <li>At least 16GB RAM recommended</li>
+                    <li>Minimum 20GB free disk space</li>
+                    <li>Stable internet connection</li>
+                </ul>
+            </div>
+            
+            <button id="be-node-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg text-xl transition duration-300 transform hover:scale-105">
+                Become a Node
+            </button>
+            
+            <div id="installation-progress" class="hidden mt-8 p-4 bg-gray-800 rounded-lg">
+                <h2 class="text-2xl mb-4">Installation Progress</h2>
+                <div class="w-full bg-gray-700 rounded-full h-4 mb-4">
+                    <div id="progress-bar" class="bg-green-500 h-4 rounded-full" style="width: 0%"></div>
+                </div>
+                <div id="status-message" class="text-left pl-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('be-node-btn').addEventListener('click', async () => {
+            // Show GPU check
+            document.getElementById('gpu-status').classList.remove('hidden');
+            
+            try {
+                // Check if user has compatible GPU
+                const gpuCheck = await checkGPU();
+                const gpuResult = document.getElementById('gpu-result');
+                
+                if (gpuCheck.compatible) {
+                    gpuResult.innerHTML = `<div class="text-green-400">✓ Compatible GPU detected: ${gpuCheck.name}</div>`;
+                    gpuResult.classList.remove('hidden');
+                    document.getElementById('gpu-check').classList.add('hidden');
+                    
+                    // Show installation progress
+                    document.getElementById('installation-progress').classList.remove('hidden');
+                    document.getElementById('be-node-btn').disabled = true;
+                    document.getElementById('be-node-btn').classList.add('bg-gray-500');
+                    document.getElementById('be-node-btn').classList.remove('bg-green-600', 'hover:bg-green-700');
+                    
+                    // Download and run bootstrap script
+                    downloadBootstrapScript();
+                } else {
+                    gpuResult.innerHTML = `<div class="text-red-400">✗ Incompatible GPU: ${gpuCheck.name || 'No RTX GPU detected'}</div>
+                                         <p class="mt-2">RENT-A-HAL requires an NVIDIA RTX 2060 Super or better.</p>`;
+                    gpuResult.classList.remove('hidden');
+                    document.getElementById('gpu-check').classList.add('hidden');
+                }
+            } catch (error) {
+                document.getElementById('gpu-result').innerHTML = `<div class="text-red-400">✗ Error checking GPU: ${error.message}</div>`;
+                document.getElementById('gpu-result').classList.remove('hidden');
+                document.getElementById('gpu-check').classList.add('hidden');
+            }
+        });
+
+        async function checkGPU() {
+            // In a real implementation, we would use WebGL to detect GPU
+            // This is a simplified placeholder
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    // Using WebGL to get GPU info
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                        if (!gl) {
+                            resolve({ compatible: false, name: null });
+                            return;
+                        }
+                        
+                        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                        if (!debugInfo) {
+                            resolve({ compatible: false, name: null });
+                            return;
+                        }
+                        
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        const isNvidia = renderer.toLowerCase().includes('nvidia');
+                        const isRTX = renderer.toLowerCase().includes('rtx');
+                        
+                        if (isNvidia && isRTX) {
+                            resolve({ compatible: true, name: renderer });
+                        } else {
+                            resolve({ compatible: false, name: renderer });
+                        }
+                    } catch (e) {
+                        resolve({ compatible: false, name: null });
+                    }
+                }, 1500);
+            });
+        }
+
+        function downloadBootstrapScript() {
+            const statusMessage = document.getElementById('status-message');
+            const progressBar = document.getElementById('progress-bar');
+            
+            // Update status
+            statusMessage.innerHTML = "Downloading RENT-A-HAL node bootstrapper...";
+            progressBar.style.width = "10%";
+            
+            // Create a link to download the PowerShell script
+            const link = document.createElement('a');
+            link.href = '/static/rtxnode-bootstrap.ps1';
+            link.download = 'rtxnode-bootstrap.ps1';
+            document.body.appendChild(link);
+            
+            // Simulate download
+            setTimeout(() => {
+                link.click();
+                document.body.removeChild(link);
+                
+                statusMessage.innerHTML += "<br>✓ Bootstrap script downloaded";
+                statusMessage.innerHTML += "<br>Please run the script as Administrator (Right-click, Run as Administrator)";
+                statusMessage.innerHTML += "<br><br><strong class='text-yellow-300'>After running the script, your system will be set up and automatically registered with RENT-A-HAL!</strong>";
+                progressBar.style.width = "20%";
+                
+                // Instruct user on next steps
+                document.getElementById('be-node-btn').disabled = false;
+                document.getElementById('be-node-btn').textContent = "Download Again";
+                document.getElementById('be-node-btn').classList.remove('bg-gray-500');
+                document.getElementById('be-node-btn').classList.add('bg-green-600', 'hover:bg-green-700');
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
