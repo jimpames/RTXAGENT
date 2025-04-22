@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://github.com/jimpames/rentahal/blob/main/rtxagentpng.png?raw=true" alt="RENT A HAL Banner" width="100%">
+</p>
+
 Implementation Notes
 This implementation:
 
